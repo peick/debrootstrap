@@ -253,7 +253,8 @@ def test_shared_libraries():
 
     result = PathEntry('/tmp/pkg/bin/bash', '/bin/bash', flexmock())
 
-    assert result.dep_lib_names == set(['ld-linux-x86-64.so.2', 'libc.so.6'])
+    assert result.dep_lib_names == set(['ld-linux-x86-64.so.2'])
+    assert result.soname == set(['libc.so.6'])
 
 
 def test_file_system(file_system):

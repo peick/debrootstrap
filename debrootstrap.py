@@ -454,10 +454,11 @@ class PathEntry(object):
         self.file_type = self._file_type(path)
 
         if self.file_type in (PathEntry.EXECUTABLE, PathEntry.SHARED_LIB):
-            dep_lib_names = self._shared_libraries(path)
+            dep_lib_names, soname = self._shared_libraries(path)
         else:
-            dep_lib_names = None
+            dep_lib_names, soname = None, None
         self.dep_lib_names = dep_lib_names
+        self.soname = soname
 
 
     def __repr__(self):
@@ -486,16 +487,22 @@ class PathEntry(object):
     def _shared_libraries(self, path):
         """Return a set of shared libraries base names for an elf binary.
         """
-        pattern = r'(Shared library|Library soname):\s*\[([^\]]+)\]'
+        pattern = r'(?:(Shared library)|(Library soname)):\s*\[([^\]]+)\]'
         cmd = ['readelf', '-d', path]
         env = {'LANG': 'C'}
         libs = set()
+        soname = set()
         output = subprocess.check_output(cmd, env=env)
         for line in output.splitlines():
             match = re.search(pattern, line)
             if match:
-                libs.add(match.group(2))
-        return libs
+                name = match.group(3)
+                if match.group(1):
+                    libs.add(name)
+                else:
+                    assert match.group(2)
+                    soname.add(name)
+        return libs, soname
 
 # ------------------------------------------------------------------------
 
