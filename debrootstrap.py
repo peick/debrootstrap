@@ -634,6 +634,7 @@ def _find_dependent_packages(cache, packages):
     # hard dependencies
     for package in packages:
         if package.hard_deps:
+            package.apt_pkg.mark_install(auto_fix=False, auto_inst=False)
             package.apt_pkg.mark_install(auto_fix=False, auto_inst=True)
 
     for pkg in cache.get_changes():
@@ -644,6 +645,7 @@ def _find_dependent_packages(cache, packages):
     # dependencies to library packages (lib-deps)
     for package in packages:
         if package.soft_deps:
+            package.apt_pkg.mark_install(auto_fix=False, auto_inst=False)
             package.apt_pkg.mark_install(auto_fix=False, auto_inst=True)
 
     for pkg in cache.get_changes():
@@ -665,6 +667,9 @@ def _find_dependent_packages(cache, packages):
         package = Package(pkg.name, pkg.architecture(), ['ldd-deps'])
         package.apt_pkg = pkg
         packages.append(package)
+
+    if cache.broken_count:
+        raise PackageNotFound('Dependency packages not found.')
 
 
 def _scan_files(root_dir, package):
