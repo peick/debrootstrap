@@ -28,7 +28,7 @@ Configuration example:
         http://archive.ubuntu.com/ubuntu/ wily universe
 
     [packages]
-    redis-server = ldd-deps
+    redis-server = ldd-deps version>=2:3.0.3-3 version<=4
         /usr/bin/redis-server    # include a binary
     libc = ldd-deps
         /lib64/ld-linux-x86-64.so.2
@@ -173,6 +173,34 @@ class Config(object):
         return config.get('global', key)
 
 
+    def _parse_flags(self, line, package_name):
+        pattern = r'''
+            (?:
+                (?P<version>version\s*(?P<cmp>>=|<=|==|>|<)\s*(?P<v>\S+))
+                |
+                (?P<constant>ldd-deps|no-deps|deps)
+                |
+                (?P<unknown>\S+)
+                (?:\s+|$)
+            )
+            '''
+
+        flags = []
+        version_cmp = []
+
+        for match in re.finditer(pattern, line, re.VERBOSE):
+            if match.group('version'):
+                comp = match.group('cmp')
+                version = match.group('v')
+                version_cmp.append((comp, version))
+            elif match.group('constant'):
+                flags.append(match.group('constant'))
+            elif match.group('unknown'):
+                raise ConfigError('unknown flag %r for package %s' \
+                                  % (match.group('unknown'), package_name))
+        return flags, version_cmp
+
+
     def _read_packages(self, config):
         if not config.has_section('packages'):
             return []
@@ -185,16 +213,17 @@ class Config(object):
             lines = value.splitlines()
 
             if lines:
-                flags = _remove_comment(lines[0]).split()
+                flags, version_cmp = self._parse_flags(
+                    _remove_comment(lines[0]), option)
             else:
-                flags = []
+                flags, version_cmp = [], []
 
             if ':' in option:
                 option, architecture = option.split(':', 1)
             else:
                 architecture = None
 
-            package = Package(option, architecture, flags)
+            package = Package(option, architecture, flags, version_cmp or None)
 
             for line in lines[1:]:
                 p = Pattern(_remove_comment(line))
@@ -337,10 +366,11 @@ class PatternList(list):
 
 
 class Package(object):
-    def __init__(self, name, architecture, flags, pattern=None):
+    def __init__(self, name, architecture, flags, version_cmp=None, pattern=None):
         self.name = name
         self.architecture = architecture
         self.flags = flags or None
+        self._version_cmp = version_cmp
         self._patterns = PatternList()
 
         # set by _find_packages
@@ -434,6 +464,20 @@ class Package(object):
                 if path_entry.dep_lib_names:
                     libs.update(path_entry.dep_lib_names)
         return libs
+
+
+    def version_filter(self, version):
+        if not self._version_cmp:
+            return True
+
+        for comparator, value in self._version_cmp:
+            if comparator == '<' and not version < value or \
+                comparator == '<=' and not version <= value or \
+                comparator == '==' and not version == value or \
+                comparator == '>=' and not version >= value or \
+                comparator == '>'  and not version > value:
+                return False
+        return True
 
 
 class PathEntry(object):
@@ -610,9 +654,23 @@ def _find_packages(config, cache):
             not_found.append(query)
             continue
 
-        if len(pkg.versions) > 1:
-            _log.warn('there is more than one version available for %s.',
-                  pkg.fullname)
+        # select version
+        candidates = [version for version in pkg.versions
+                      if package.version_filter(version)]
+        if not candidates:
+            vx = [v.version for v in pkg.versions]
+            raise PackageNotFound(
+                    'the package %s was not found in the desired version.' \
+                    ' Available versions: %s' \
+                    % (pkg.fullname, ', '.join(vx)))
+
+        if len(candidates) > 2:
+            vx = [v.version for v in candidates]
+            raise PackageNotFound(
+                    'the package %s is available in multiple versions: %s ' \
+                    % (pkg.fullname, ', '.join(vx)))
+
+        pkg.candidate = candidates[0]
 
         package.apt_pkg = pkg
         _log.info('found package %s %s', pkg.fullname, pkg.candidate.version)
@@ -870,10 +928,10 @@ def main():
 
     try:
         packages = _find_packages(config, cache)
-    except PackageNotFound:
-        sys.exit(1)
-    else:
         _find_dependent_packages(cache, packages)
+    except PackageNotFound as error:
+        _log.error(error)
+        sys.exit(1)
 
     cache.fetch_archives()
 

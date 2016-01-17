@@ -33,21 +33,29 @@ def pkg_bash_i386():
                  dep_lib_names=set(['ld-linux-x86-64.so.2']))
     ]
 
+    versions = [
+        flexmock(version='3.4')
+    ]
+
     return flexmock(
         name='bash',
         fullname='bash:i386',
         architecture='i386',
-        versions=['3.4'],
+        versions=versions,
         candidate=flexmock(version='3.4'),
         all_files=files)
 
 @pytest.fixture(scope='function')
 def pkg_bash_amd64():
+    versions = [
+        flexmock(version='3.4')
+    ]
+
     return flexmock(
         name='bash',
         fullname='bash:amd64',
         architecture=lambda:'amd64',
-        versions=['3.4'],
+        versions=versions,
         candidate=flexmock(version='3.4'))
 
 @pytest.fixture(scope='function')
@@ -119,7 +127,7 @@ def test_pattern_list(patterns, value, expect):
      'i386',
      ['http://archive.ubuntu.com/ubuntu/ wily main restricted'],
      [
-        Package('bash', None, None, [Pattern('/bin/bash')]),
+        Package('bash', None, None, pattern=[Pattern('/bin/bash')]),
         Package('zip', None, None),
         Package('zsh', 'i386', ['no-deps'])
      ]),
@@ -133,6 +141,7 @@ def test_pattern_list(patterns, value, expect):
      bash =
          /bin/*
          /etc/**
+     dash = ldd-deps version==0.5.7
      zip = no-deps
          /usr/bin/zip
      zsh = no-deps
@@ -142,9 +151,10 @@ def test_pattern_list(patterns, value, expect):
      ['http://archive.ubuntu.com/ubuntu/ wily main restricted'],
      [
         Package('bash', None, None,
-            [Pattern('/bin/*'), Pattern('/etc/**')]),
+            pattern=[Pattern('/bin/*'), Pattern('/etc/**')]),
+        Package('dash', None, ['ldd-deps'], [('==', '0.5.7')]),
         Package('zip', None, ['no-deps'],
-            [Pattern('/usr/bin/zip')]),
+            pattern=[Pattern('/usr/bin/zip')]),
         Package('zsh', None, ['no-deps'])
      ]),
 ])
