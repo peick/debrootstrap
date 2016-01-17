@@ -896,7 +896,8 @@ def main():
         log_level = logging.WARN
     else:
         log_level = logging.INFO
-    logging.basicConfig(format='%(levelname).1s: %(message)s', level=log_level)
+    logging.basicConfig(format='%(levelname).1s: %(message)s',
+        level=log_level, stream=sys.stdout)
 
     config = Config()
     config.readfp(open(options.config))
