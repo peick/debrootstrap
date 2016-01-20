@@ -141,6 +141,7 @@ class Config(object):
         self.architecture = None
         self.sources = []
         self.keyring = None
+        self.keyring_dir = None
 
 
     def readfp(self, file_obj):
@@ -150,6 +151,7 @@ class Config(object):
         self.architecture = self._read_global(config, 'architecture', 'amd64')
 
         self.keyring = self._read_global(config, 'keyring', '/etc/apt/trusted.gpg')
+        self.keyring_dir = self._read_global(config, 'keyring_dir', '/etc/apt/trusted.gpg.d')
 
         post_build = self._read_global(config, 'post-build', '')
         self.post_build = _load_scripts(post_build)
@@ -625,9 +627,23 @@ def _init_admin_rootfs(config, options, base):
 
     open(os.path.join(base, 'status'), 'a').write('')
 
-    keyring = open(config.keyring).read()
-    keyring_path = os.path.join(base, 'etc', 'apt', 'trusted.gpg')
-    open(keyring_path, 'w').write(keyring)
+    key_available = False
+
+    if os.path.exists(config.keyring):
+        dest = os.path.join(base, 'etc', 'apt', 'trusted.gpg')
+        shutil.copy2(config.keyring, dest)
+        key_available = True
+
+    dest = os.path.join(base, 'etc', 'apt', 'trusted.gpg.d')
+    if os.path.exists(config.keyring_dir):
+        for cur_dir, dirs, files in os.walk(config.keyring_dir):
+            for f in files:
+                src = os.path.join(config.keyring_dir, cur_dir, f)
+                shutil.copy2(src, dest)
+                key_available = True
+
+    if not key_available:
+        raise ConfigError('No keyring installed in %s' % dest)
 
 
 def _write_sources_list(config, options, base):
