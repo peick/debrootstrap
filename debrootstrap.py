@@ -42,6 +42,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import urllib
 from ConfigParser import SafeConfigParser
 from collections import defaultdict
@@ -63,8 +64,6 @@ class ConfigFormatter(optparse.IndentedHelpFormatter):
 
 
 def _get_cli_args():
-    cwd = os.path.join(os.getcwd(), 'tmp')
-
     parser = optparse.OptionParser(version='%%prog %s' % __version__,
                                    usage='%prog [options] <target>',
                                    description=__doc__,
@@ -84,9 +83,10 @@ def _get_cli_args():
                       help='Configuration file. Required')
     parser.add_option('--tmp-dir',
                       dest='temp_dir',
-                      default=cwd,
-                      help='Temporary working directory. Defaults to "tmp" ' \
-                           'in the current working directory: %s' % cwd)
+                      default=None,
+                      help='Temporary working directory. Defaults to a ' \
+                           'temporaray directory in the current working ' \
+                           'directory')
     parser.add_option('-k', '--keep-tmp-dir',
                       dest='keep_temp_dir',
                       action='store_true',
@@ -96,7 +96,7 @@ def _get_cli_args():
     options.target = None
 
     if args:
-        options.target = args.pop(0)
+        options.target = os.path.abspath(args.pop(0))
 
     if not options.target:
         parser.error('You need to specify a target')
@@ -107,6 +107,9 @@ def _get_cli_args():
     return options
 
 # ------------------------------------------------------------------------
+
+class DebrootstrapError(Exception):
+    pass
 
 class ConfigError(Exception):
     pass
@@ -267,7 +270,7 @@ class ScriptFunction(Script):
 
 
 class ScriptFunctionUPX(ScriptFunction):
-    parser_options = [optparse.Option('--executable', action='store_true')]
+    parser_options = [optparse.Option('--all', action='store_true')]
 
     def _generate_commands(self, options, args):
         if not args:
@@ -276,11 +279,11 @@ class ScriptFunctionUPX(ScriptFunction):
         args = ['$TARGET/%s' % arg for arg in args]
 
         cmd = "find %s -type f " % ' '.join(args)
-        if options.executable:
+        if not options.all:
             cmd += "-exec file --mime-type {} \; " \
                    "| grep ':\s*application/\(x-executable\|x-sharedlib\)' " \
                    "| cut -d':' -f1"
-        cmd += "| xargs --no-run-if-empty upx --best --ultra-brute"
+        cmd += "| /usr/bin/xargs --no-run-if-empty upx --best --ultra-brute"
         return [cmd]
 
 
@@ -290,12 +293,12 @@ class ScriptFunctionInstallBusybox(ScriptFunction):
             raise ConfigError('${busybox} function does not take any arguments')
 
         return ["$TARGET/bin/busybox --list-full " \
-                    "| xargs -n1 dirname " \
+                    "| /usr/bin/xargs -n1 dirname " \
                     "| sort " \
                     "| uniq " \
-                    "| xargs -n1 -I '{}' mkdir -p $TARGET/'{}'",
+                    "| /usr/bin/xargs -n1 -I '{}' mkdir -p $TARGET/'{}'",
                 "$TARGET/bin/busybox --list-full " \
-                    "| xargs -n1 -I '{}' ln -s /bin/busybox $TARGET/'{}'"]
+                    "| /usr/bin/xargs -n1 -I '{}' sh -c \"test -e $TARGET/'{}' || ln -s /bin/busybox $TARGET/'{}'\""]
 
 
 _script_functions = {
@@ -646,6 +649,11 @@ def _init_admin_rootfs(config, options, base):
         raise ConfigError('No keyring installed in %s' % dest)
 
 
+def _check_target(options):
+    if os.path.exists(options.target):
+        raise DebrootstrapError('Target %s already exists.' % options.target)
+
+
 def _write_sources_list(config, options, base):
     path = os.path.join(base, 'etc', 'apt', 'sources.list')
     _log.debug('generating %s', path)
@@ -743,7 +751,7 @@ def _find_dependent_packages(cache, packages):
         packages.append(package)
 
     if cache.broken_count:
-        raise PackageNotFound('Dependency packages not found.')
+        _log.warn('Dependency packages not found. The result may be incorrect.')
 
 
 def _scan_files(root_dir, package):
@@ -822,7 +830,8 @@ def _resolve_dependencies(packages):
                         if not pe.package.is_excluded(pe)]
 
         if not path_entries:
-            raise PathEntryError('shared library %s not found' % basename)
+            _log.warn('shared library %s not found', basename)
+            continue
 
         if len(path_entries) > 1:
             candidates = ['%s:%s' % (pe.package.name, pe.chroot_path)
@@ -919,10 +928,19 @@ def main():
     config.readfp(open(options.config))
 
     base = options.temp_dir
-    base_exists = os.path.exists(base)
+    if not base:
+        base = tempfile.mkdtemp(dir='.', prefix='tmp-debrootstrap-')
+        base_exists = False
+    else:
+        base_exists = os.path.exists(base)
+    base = os.path.abspath(base)
     _init_admin_rootfs(config, options, base)
 
-    if not base_exists:
+    _check_target(options)
+
+    if base_exists:
+        _log.warn('reusing existing directory: %s', base)
+    else:
         _write_sources_list(config, options, base)
         _log.info('updating packages')
         cache = apt.Cache(rootdir=base)
@@ -959,7 +977,7 @@ def main():
     for post_build_fn in config.post_build:
         post_build_fn(options.target)
     if not options.keep_temp_dir:
-        _cleanup(options.temp_dir)
+        _cleanup(base)
 
 
 if __name__ == '__main__':
