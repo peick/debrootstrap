@@ -127,8 +127,8 @@ def test_pattern_list(patterns, value, expect):
      'i386',
      ['http://archive.ubuntu.com/ubuntu/ wily main restricted'],
      [
-        Package('bash', None, None, pattern=[Pattern('/bin/bash')]),
-        Package('zip', None, None),
+        Package('bash', None, ['ldd-deps'], pattern=[Pattern('/bin/bash')]),
+        Package('zip', None, ['ldd-deps']),
         Package('zsh', 'i386', ['no-deps'])
      ]),
 
@@ -150,7 +150,7 @@ def test_pattern_list(patterns, value, expect):
      'amd64',
      ['http://archive.ubuntu.com/ubuntu/ wily main restricted'],
      [
-        Package('bash', None, None,
+        Package('bash', None, ['ldd-deps'],
             pattern=[Pattern('/bin/*'), Pattern('/etc/**')]),
         Package('dash', None, ['ldd-deps'], [('==', '0.5.7')]),
         Package('zip', None, ['no-deps'],

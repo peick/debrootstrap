@@ -41,6 +41,7 @@ import fnmatch
 import logging
 import optparse
 import os
+import pipes
 import re
 import shutil
 import subprocess
@@ -94,15 +95,29 @@ def _get_cli_args():
                       dest='keep_temp_dir',
                       action='store_true',
                       help='Do not delete --tmp-dir.')
+    parser.add_option('--tar',
+                      dest='tar',
+                      help='Create tarball archive')
+    parser.add_option('--tar-options',
+                      dest='tar_options',
+                      help='Additional options for "tar" creation. Requires --tar')
+    parser.add_option('-d',
+                      dest='target',
+                      help='Rootfs target directory')
 
     options, args = parser.parse_args()
-    options.target = None
 
     if args:
-        options.target = os.path.abspath(args.pop(0))
+        parser.error('Additional argument not allowed: %s' % ' '.join(args))
 
-    if not options.target:
-        parser.error('You need to specify a target')
+    if options.target:
+        options.target = os.path.abspath(options.target)
+
+    if not options.target and not options.tar:
+        parser.error('You need to specify a target output with -d or --tar')
+
+    if options.tar_options and not options.tar:
+        parser.error('--tar-options requires --tar')
 
     if not options.config:
         parser.error('You need to specify a configuration file with -c <file>')
@@ -780,8 +795,9 @@ def _scan_files(root_dir, package):
 
 
 def _pkg_path_quote(s):
+    safe = '+~'
     tolower = lambda m: m.group(0).lower()
-    return re.sub(r'%[A-Fa-f0-9]{2}', tolower, urllib.quote_plus(s, '+'))
+    return re.sub(r'%[A-Fa-f0-9]{2}', tolower, urllib.quote_plus(s, safe))
 
 
 def _extract_packages(packages, admin_base, target):
@@ -911,6 +927,19 @@ def _print_rootfs_files(packages):
         'all files from all packages (unfiltered):%s', '\n'.join(fmt))
 
 
+def _tar(config, options):
+    _log.info('creating tar file %s', options.tar)
+    if options.tar_options:
+        tar_options = options.tar_options
+    else:
+        tar_options = ''
+
+    cmd = 'tar -C %s -cf %s %s .' % (pipes.quote(options.target),
+                                     pipes.quote(options.tar),
+                                     tar_options)
+    subprocess.check_call(cmd, shell=True)
+
+
 def _cleanup(tmp_dir):
     _log.debug('removing %s', tmp_dir)
     shutil.rmtree(tmp_dir)
@@ -943,6 +972,8 @@ def main():
     base = os.path.abspath(base)
     _init_admin_rootfs(config, options, base)
 
+    if not options.target:
+        options.target = os.path.join(base, 'tmp-rootfs')
     _check_target(options)
 
     if base_exists:
@@ -983,6 +1014,8 @@ def main():
     _copy_rootfs_files(options.target, packages)
     for post_build_fn in config.post_build:
         post_build_fn(options.target)
+    if options.tar:
+        _tar(config, options)
     if not options.keep_temp_dir:
         _cleanup(base)
 
