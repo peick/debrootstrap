@@ -20,6 +20,9 @@ Configuration example:
     # optional. Defaults to /etc/apt/trusted.gpg
     keyring = /etc/apt/trusted.gpg
 
+    # optional. Defaults to ldd-deps. Values are ldd-deps, no-deps, deps
+    dependency = ldd-deps
+
     # list of apt sources as seen in /etc/apt/sources.list without 'deb' prefix
     sources =
         http://archive.ubuntu.com/ubuntu/ wily main restricted
@@ -152,6 +155,7 @@ class Config(object):
         config.readfp(file_obj)
 
         self.architecture = self._read_global(config, 'architecture', 'amd64')
+        self.dependency = self._read_global(config, 'dependency', 'ldd-deps')
 
         self.keyring = self._read_global(config, 'keyring', '/etc/apt/trusted.gpg')
         self.keyring_dir = self._read_global(config, 'keyring_dir', '/etc/apt/trusted.gpg.d')
@@ -222,6 +226,9 @@ class Config(object):
                     _remove_comment(lines[0]), option)
             else:
                 flags, version_cmp = [], []
+
+            if not set(flags) & set(['no-deps', 'deps', 'ldd-deps']):
+                flags.append(self.dependency)
 
             if ':' in option:
                 option, architecture = option.split(':', 1)
