@@ -165,14 +165,15 @@ def test_pattern_list(patterns, value, expect):
          # ignored
 
       [packages]
-      bash
+      bash = # ignored
+         # ignored
       ''',
       # expectations:
       'amd64',
      ['http://archive.ubuntu.com/ubuntu/ wily main restricted'],
      [
          Package('bash', None, ['ldd-deps'])
-     ]
+     ])
 ])
 def test_read_config(raw, architecture, sources, packages):
     config = Config()

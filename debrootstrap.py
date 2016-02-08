@@ -143,7 +143,11 @@ class PathEntryError(Exception):
 _INCLUDE = 'INCLUDE'
 _EXCLUDE = 'EXCLUDE'
 
-_remove_comment = lambda s: re.sub(r'\s+#.*$', '', s).strip()
+_remove_comment = lambda s: re.sub(r'(\s+|^)#.*$', '', s).strip()
+
+def _filter_comment_lines(lines):
+    lines = [_remove_comment(line) for line in lines]
+    return [line for line in lines if line.strip()]
 
 # ------------------------------------------------------------------------
 
@@ -181,7 +185,7 @@ class Config(object):
         sources = self._read_global(config, 'sources', '').strip()
         if not sources:
             raise ConfigError('missing sources in [global]')
-        self.sources = map(_remove_comment, sources.splitlines())
+        self.sources = _filter_comment_lines(sources.splitlines())
 
         self.packages = self._read_packages(config)
         assert self.architecture
@@ -234,6 +238,7 @@ class Config(object):
             value = config.get('packages', option)
             if not value:
                 value = ''
+
             lines = value.splitlines()
 
             if lines:
@@ -252,8 +257,9 @@ class Config(object):
 
             package = Package(option, architecture, flags, version_cmp or None)
 
-            for line in lines[1:]:
-                p = Pattern(_remove_comment(line))
+            lines = _filter_comment_lines(lines[1:])
+            for line in lines:
+                p = Pattern(line)
                 package.add_pattern(p)
 
             packages.append(package)
