@@ -157,6 +157,22 @@ def test_pattern_list(patterns, value, expect):
             pattern=[Pattern('/usr/bin/zip')]),
         Package('zsh', None, ['no-deps'])
      ]),
+
+     ('''
+      [global]
+      sources =
+         http://archive.ubuntu.com/ubuntu/ wily main restricted  # ignore comment
+         # ignored
+
+      [packages]
+      bash
+      ''',
+      # expectations:
+      'amd64',
+     ['http://archive.ubuntu.com/ubuntu/ wily main restricted'],
+     [
+         Package('bash', None, ['ldd-deps'])
+     ]
 ])
 def test_read_config(raw, architecture, sources, packages):
     config = Config()

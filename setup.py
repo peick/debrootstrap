@@ -1,12 +1,12 @@
 from setuptools import setup
 
 setup(name='debrootstrap',
-      version='0.1.6',
+      version='0.1.7',
       description='',
       author='Michael Peick',
       author_email='michael.peick+debrootstrap@gmail.com',
       url='https://github.com/peick/debrootstrap',
-      pymodules=['debrootstrap'],
+      py_modules=['debrootstrap'],
       entry_points={
           'console_scripts': [
               'debrootstrap = debrootstrap:main'

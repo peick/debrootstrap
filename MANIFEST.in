@@ -1,0 +1,3 @@
+include test_debrootstrap.py
+include tox.ini
+include LICENSE README.md
