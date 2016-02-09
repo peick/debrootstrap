@@ -163,6 +163,8 @@ def test_pattern_list(patterns, value, expect):
       sources =
          http://archive.ubuntu.com/ubuntu/ wily main restricted  # ignore comment
          # ignored
+      post-build =
+        # ignored
 
       [packages]
       bash = # ignored
@@ -173,7 +175,8 @@ def test_pattern_list(patterns, value, expect):
      ['http://archive.ubuntu.com/ubuntu/ wily main restricted'],
      [
          Package('bash', None, ['ldd-deps'])
-     ])
+     ]),
+
 ])
 def test_read_config(raw, architecture, sources, packages):
     config = Config()

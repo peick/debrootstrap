@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='debrootstrap',
-      version='0.1.7',
+      version='0.1.8',
       description='',
       author='Michael Peick',
       author_email='michael.peick+debrootstrap@gmail.com',
